@@ -440,6 +440,34 @@ class MOLNSController(MOLNSbase):
         #sshdeploy.deploy_stochss(inst.ip_address, port=443)
 
     @classmethod
+    def restart_controller(cls, args, config, password=None):
+        """ Restart the MOLNs controller. """
+        logging.debug("MOLNSController.restart_controller(args={0})".format(args))
+        controller_obj = cls._get_controllerobj(args, config)
+        if controller_obj is None: return
+        # Check if any instances are assigned to this controller
+        instance_list = config.get_all_instances(controller_id=controller_obj.id)
+        # Check if they are running or stopped (if so, resume them)
+        inst = None
+        if len(instance_list) > 0:
+            for i in instance_list:
+                status = controller_obj.get_instance_status(i)
+                if status == controller_obj.STATUS_RUNNING:
+                    print "Restarting already controller running at {0}".format(i.ip_address)
+                    controller_obj.stop_instance(i)
+                    controller_obj.resume_instance(i)
+                    return
+                elif status == controller_obj.STATUS_STOPPED:
+                    print "Resuming instance at {0}".format(i.ip_address)
+                    controller_obj.resume_instance(i)
+                    inst = i
+                    break
+        if inst is None:
+            # Start a new instance
+            print "There was no instance to restart"
+
+
+    @classmethod
     def stop_controller(cls, args, config):
         """ Stop the head node of a MOLNs controller. """
         logging.debug("MOLNSController.stop_controller(args={0})".format(args))
@@ -1387,6 +1415,8 @@ COMMAND_LIST = [
             function=MOLNSController.status_controller),
         Command('start', {'name':None},
             function=MOLNSController.start_controller),
+        Command('restart', {'name':None},
+            function=MOLNSController.restart_controller),        
         Command('stop', {'name':None},
             function=MOLNSController.stop_controller),
         Command('terminate', {'name':None},
