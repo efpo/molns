@@ -353,13 +353,36 @@ class OpenStackProvider(OpenStackBase):
     def _attach_floating_ip(self, instance):
        # Try to attach a floating IP to the controller
         logging.info("Attaching floating ip to the server...")
-        try:
-            floating_ip = self.nova.floating_ips.create(self.config['floating_ip_pool'])
-            instance.add_floating_ip(floating_ip)
-            logging.debug("ip={0}".format(floating_ip.ip))
-            return floating_ip.ip
+
+        # Getting floating ips
+        floating_ips = self.nova.floating_ips.list()
+
+        # If an already allocated floating ip is free, associate that with the instance
+        # otherwise create a new one
+        free_floating_ip = None
+        try: 
+            for floating_ip in floating_ips:
+                instance_id = self.nova.floating_ips.get(floating_ip).instance_id           
+                if instance_id is None:
+                    free_floating_ip = floating_ip 
         except Exception as e:
-            raise ProviderException("Failed to attach a floating IP to the controller.\n{0}".format(e))
+            pass   
+
+        if free_floating_ip is None:
+            logging.info("No already allocated free floating ip found attaching a new floating ip to the server...")
+            create_new_floating_ip()
+        else:
+            logging.info("Attaching already allocated free floating ip %s to instance..." % free_floating_ip)
+            instance.add_floating_ip(free_floating_ip)
+
+        def create_new_floating_ip():
+            try:
+                floating_ip = self.nova.floating_ips.create(self.config['floating_ip_pool'])
+                instance.add_floating_ip(floating_ip)
+                logging.debug("ip={0}".format(floating_ip.ip))
+                return floating_ip.ip
+            except Exception as e:
+                raise ProviderException("Failed to attach a floating IP to the controller.\n{0}".format(e))
 
 ##########################################
 class OpenStackController(OpenStackBase):
